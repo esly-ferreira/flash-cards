@@ -128,7 +128,7 @@ body {
 
 .card {
   width: 100%;
-  min-height: 70vh;
+  min-height: 60vh;
   cursor: pointer;
   position: relative;
 }
@@ -136,7 +136,7 @@ body {
 .card-inner {
   position: relative;
   width: 100%;
-  min-height: 70vh;
+  min-height: 60vh;
   transition: transform var(--transition);
   transform-style: preserve-3d;
 }
@@ -364,7 +364,7 @@ body {
 @media (min-width: 900px) {
   .card,
   .card-inner {
-    min-height: 70vh;
+    min-height: 60vh;
   }
 
   .card-face {
