@@ -145,22 +145,39 @@
     return out;
   }
 
+  function shuffleArray(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i];
+      a[i] = a[j];
+      a[j] = t;
+    }
+    return a;
+  }
+
   function getProgress() {
     try {
       var saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         var data = JSON.parse(saved);
         if (data && typeof data.lastIndex === 'number' && Array.isArray(data.studied)) {
-          return { lastIndex: data.lastIndex, studied: data.studied };
+          return {
+            lastIndex: data.lastIndex,
+            studied: data.studied || [],
+            order: Array.isArray(data.order) ? data.order : null
+          };
         }
       }
     } catch (e) {}
-    return { lastIndex: 0, studied: [] };
+    return { lastIndex: 0, studied: [], order: null };
   }
 
-  function saveProgress(lastIndex, studied) {
+  function saveProgress(lastIndex, studied, order) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ lastIndex: lastIndex, studied: studied }));
+      var payload = { lastIndex: lastIndex, studied: studied };
+      if (order && order.length) payload.order = order;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (e) {}
   }
 
@@ -199,8 +216,15 @@
 
   function init(cards) {
     var progress = getProgress();
+    var order = progress.order;
+    if (!order || order.length !== cards.length) {
+      order = shuffleArray(cards.map(function (_, i) { return i; }));
+      saveProgress(0, [], order);
+    }
+    var orderedCards = order.map(function (i) { return cards[i]; });
+
     var studied = progress.studied || [];
-    var lastIndex = Math.min(Math.max(0, progress.lastIndex), cards.length - 1);
+    var lastIndex = Math.min(Math.max(0, progress.lastIndex), orderedCards.length - 1);
     var currentIndex = lastIndex;
 
     var counterEl = document.getElementById('counter');
@@ -209,34 +233,40 @@
     var conceptEl = document.getElementById('cardConcept');
     var contentEl = document.getElementById('cardContent');
     var btnNext = document.getElementById('btnNext');
+    var btnPrev = document.getElementById('btnPrev');
     var btnReset = document.getElementById('btnReset');
 
     function markStudied(index) {
-      if (index < 0 || index >= cards.length) return;
+      if (index < 0 || index >= orderedCards.length) return;
       if (studied.indexOf(index) === -1) studied.push(index);
-      saveProgress(currentIndex, studied);
+      saveProgress(currentIndex, studied, order);
     }
 
     function updateCounter() {
       var count = studied.length;
-      var total = cards.length;
+      var total = orderedCards.length;
       if (counterEl) counterEl.textContent = count + ' / ' + total + ' cards estudados';
     }
 
+    function updateButtons() {
+      if (btnNext) btnNext.disabled = currentIndex >= orderedCards.length - 1;
+      if (btnPrev) btnPrev.disabled = currentIndex <= 0;
+    }
+
     function renderCard(index) {
-      if (index < 0 || index >= cards.length) return;
-      var card = cards[index];
+      if (index < 0 || index >= orderedCards.length) return;
+      var card = orderedCards[index];
       if (conceptEl) conceptEl.textContent = card.concept;
       if (contentEl) contentEl.innerHTML = formatContent(card.content);
       cardEl.classList.remove('flipped');
       updateCounter();
-      btnNext.disabled = false;
+      updateButtons();
     }
 
     function goToNext() {
       markStudied(currentIndex);
       var nextIndex = currentIndex + 1;
-      if (nextIndex >= cards.length) nextIndex = cards.length - 1;
+      if (nextIndex >= orderedCards.length) nextIndex = orderedCards.length - 1;
 
       if (nextIndex !== currentIndex) {
         cardWrapper.classList.add('changing');
@@ -251,13 +281,32 @@
         }, 280);
       } else {
         updateCounter();
+        updateButtons();
       }
+    }
+
+    function goToPrev() {
+      var prevIndex = currentIndex - 1;
+      if (prevIndex < 0) prevIndex = 0;
+      if (prevIndex === currentIndex) return;
+      cardWrapper.classList.add('changing');
+      var inner = cardEl.querySelector('.card-inner');
+      if (inner) inner.classList.remove('anim-in');
+      setTimeout(function () {
+        currentIndex = prevIndex;
+        renderCard(currentIndex);
+        cardWrapper.classList.remove('changing');
+        inner = cardEl.querySelector('.card-inner');
+        if (inner) inner.classList.add('anim-in');
+      }, 280);
     }
 
     function resetProgress() {
       studied = [];
+      order = shuffleArray(cards.map(function (_, i) { return i; }));
+      orderedCards = order.map(function (i) { return cards[i]; });
       currentIndex = 0;
-      saveProgress(0, []);
+      saveProgress(0, [], order);
       cardWrapper.classList.add('changing');
       setTimeout(function () {
         renderCard(0);
@@ -275,11 +324,16 @@
       goToNext();
     });
 
+    if (btnPrev) btnPrev.addEventListener('click', function () {
+      goToPrev();
+    });
+
     btnReset.addEventListener('click', function () {
       resetProgress();
     });
 
     updateCounter();
+    updateButtons();
     renderCard(currentIndex);
   }
 
